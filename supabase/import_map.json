@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "piexifjs": "https://esm.sh/piexifjs@1.0.6"
+  }
+}
+
