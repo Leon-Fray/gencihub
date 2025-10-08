@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { CreateUserDialog } from '@/components/create-user-dialog'
 import { AssignModelDialog } from '@/components/assign-model-dialog'
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase'
-import { getModels, getVAModelAssignments, removeModelFromVA } from '@/lib/model-actions'
+import { getModels, getVAModelAssignments, removeModelFromVA, ModelAssignment } from '@/lib/model-actions'
 import { X } from 'lucide-react'
 import { RemoveModelButton } from '@/components/remove-model-button'
 
@@ -39,7 +39,7 @@ export default async function UsersPage() {
   const usersWithModels = await Promise.all(
     profiles?.map(async profile => {
       const authUser = authUsers?.find(u => u.id === profile.id)
-      let modelAssignments = []
+      let modelAssignments: ModelAssignment[] = []
       
       if (profile.role === 'va') {
         modelAssignments = await getVAModelAssignments(profile.id)
