@@ -18,7 +18,7 @@ export default async function ModelDetailsPage() {
 
   // Fetch models assigned to this VA
   const modelAssignments = await getVAModelAssignments(vaId)
-  const models = modelAssignments.map(assignment => assignment.model).filter(Boolean)
+  const models = modelAssignments.map(assignment => assignment.model).filter((model): model is NonNullable<typeof model> => model !== null && model !== undefined)
 
   // Function to get initials from model name
   const getInitials = (name: string) => {
