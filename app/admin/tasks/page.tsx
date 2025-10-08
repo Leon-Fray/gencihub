@@ -70,7 +70,7 @@ export default async function TasksPage() {
                       <span className="text-sm text-gray-500">🎯 Target Subreddits ({Array.isArray(task.target_subreddits) ? task.target_subreddits.length : 0}): </span>
                       <span className="text-sm font-medium">
                         {Array.isArray(task.target_subreddits) 
-                          ? task.target_subreddits.slice(0, 5).map(s => `r/${s}`).join(', ') + (task.target_subreddits.length > 5 ? `, +${task.target_subreddits.length - 5} more` : '')
+                          ? task.target_subreddits.slice(0, 5).map((s: string) => `r/${s}`).join(', ') + (task.target_subreddits.length > 5 ? `, +${task.target_subreddits.length - 5} more` : '')
                           : task.target_subreddits
                         }
                       </span>
