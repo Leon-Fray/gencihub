@@ -8,14 +8,7 @@ import { Loader2, Download } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser'
 import piexif from 'piexifjs'
 import JSZip from 'jszip'
-
-interface Model {
-  id: string
-  name: string
-  bio: string
-  google_drive_link: string
-  storage_folder?: string
-}
+import { Model } from '@/lib/model-actions'
 
 interface ModelTileWithSpoofProps {
   model: Model
