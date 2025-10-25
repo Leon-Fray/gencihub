@@ -5,8 +5,10 @@ import { CreateUserDialog } from '@/components/create-user-dialog'
 import { AssignModelDialog } from '@/components/assign-model-dialog'
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase'
 import { getModels, getVAModelAssignments, removeModelFromVA, ModelAssignment } from '@/lib/model-actions'
-import { X } from 'lucide-react'
+import { getTotalHoursWorked } from '@/lib/actions'
+import { X, Clock } from 'lucide-react'
 import { RemoveModelButton } from '@/components/remove-model-button'
+import Link from 'next/link'
 
 export default async function UsersPage() {
   const supabase = createSupabaseAdminClient()
@@ -35,21 +37,25 @@ export default async function UsersPage() {
   const { data: { session } } = await supabaseServer.auth.getSession()
   const currentUser = session?.user || null
 
-  // Combine profile and auth data, and fetch model assignments for VAs
+  // Combine profile and auth data, and fetch model assignments and total hours for VAs
   const usersWithModels = await Promise.all(
     profiles?.map(async profile => {
       const authUser = authUsers?.find(u => u.id === profile.id)
       let modelAssignments: ModelAssignment[] = []
+      let totalHours = 0
       
       if (profile.role === 'va') {
         modelAssignments = await getVAModelAssignments(profile.id)
+        const hoursData = await getTotalHoursWorked(profile.id)
+        totalHours = hoursData.totalHours
       }
       
       return {
         ...profile,
         email: authUser?.email || 'N/A',
         created_at: authUser?.created_at || new Date().toISOString(),
-        assignedModels: modelAssignments
+        assignedModels: modelAssignments,
+        totalHours
       }
     }) || []
   )
@@ -87,6 +93,7 @@ export default async function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Assigned Models</TableHead>
+                <TableHead>Total Hours</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -131,6 +138,16 @@ export default async function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
+                        {user.role === 'va' ? (
+                          <Link href={`/admin/time-tracking?va=${user.id}`} className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium">
+                            <Clock className="h-4 w-4" />
+                            {user.totalHours.toFixed(2)} hrs
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         {new Date(user.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
@@ -148,7 +165,7 @@ export default async function UsersPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No users found. Create your first user to get started.
                   </TableCell>
                 </TableRow>

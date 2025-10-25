@@ -6,6 +6,10 @@ import { VerifyCookieSetupButton } from '@/components/verify-cookie-setup-button
 import { DeleteUsedProxiesButton } from '@/components/delete-used-proxies-button'
 import { DeleteCookieButton } from '@/components/delete-cookie-button'
 import { DeleteIPProxyButton } from '@/components/delete-ip-proxy-button'
+import { UploadCookieDialog } from '@/components/upload-cookie-dialog'
+import { AddProxiesDialog } from '@/components/add-proxies-dialog'
+import { SyncProxiesButton } from '@/components/sync-proxies-button'
+import { ClearAndResyncProxiesButton } from '@/components/clear-and-resync-proxies-button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/utils'
 import { getAllCookies, getAllRedirectLinks, getAllIPProxies, getResourceAssignments } from '@/lib/actions'
@@ -27,6 +31,7 @@ export default async function ResourcesPage() {
         <div className="flex flex-wrap gap-2">
           <VerifyCookieSetupButton />
           <SyncCookiesButton />
+          <UploadCookieDialog />
           <CreateCookieDialog />
           <CreateRedirectLinkDialog />
         </div>
@@ -37,7 +42,9 @@ export default async function ResourcesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Cookie Files</CardTitle>
-            <CardDescription>Manage browser cookie files for account authentication</CardDescription>
+            <CardDescription>
+              Upload single or multiple cookie files - they'll be automatically renamed to Cookie_1, Cookie_2, etc.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -53,7 +60,7 @@ export default async function ResourcesPage() {
                 {cookies.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-gray-500">
-                      No cookies found. Upload cookie files to the Supabase Storage &quot;cookies&quot; bucket and click &quot;Sync from Storage&quot;.
+                      No cookies found. Click &quot;Upload Cookie File&quot; to add cookie files automatically.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -88,12 +95,19 @@ export default async function ResourcesPage() {
 
         {/* IP Proxies Management */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <div className="space-y-1">
-              <CardTitle>IP Proxies</CardTitle>
-              <CardDescription>Manage IP proxies from proxyList300.txt</CardDescription>
+          <CardHeader className="space-y-3">
+            <div className="flex justify-between items-start">
+              <div className="space-y-1">
+                <CardTitle>IP Proxies</CardTitle>
+                <CardDescription>Manage IP proxies from proxyListNew.txt</CardDescription>
+              </div>
+              <DeleteUsedProxiesButton />
             </div>
-            <DeleteUsedProxiesButton />
+            <div className="flex flex-wrap gap-2">
+              <ClearAndResyncProxiesButton />
+              <SyncProxiesButton />
+              <AddProxiesDialog />
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
@@ -109,7 +123,7 @@ export default async function ResourcesPage() {
                 {ipProxies.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-gray-500">
-                      No IP proxies found. Upload proxyList300.txt to the Supabase Storage &quot;iplist&quot; bucket and click &quot;Sync from Storage&quot;.
+                      No IP proxies found. Click &quot;Sync from File&quot; to load proxies from proxyListNew.txt.
                     </TableCell>
                   </TableRow>
                 ) : (

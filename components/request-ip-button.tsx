@@ -76,7 +76,7 @@ export function RequestIPButton({ vaId }: RequestIPButtonProps) {
           </div>
           
           <div>
-            <p className="text-xs text-blue-600">Line #{ipData.line_number} from proxyList300.txt</p>
+            <p className="text-xs text-blue-600">Line #{ipData.line_number} from proxyListNew.txt</p>
           </div>
           
           <Button

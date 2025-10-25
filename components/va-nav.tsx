@@ -11,7 +11,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard' },
   { name: 'New Account', href: '/dashboard/new-account' },
   { name: 'Model Details', href: '/dashboard/model-details' },
-  { name: 'SOP & Tutorials', href: '/dashboard/sop-tutorials' },
+  // { name: 'SOP & Tutorials', href: '/dashboard/sop-tutorials' },
 ]
 
 export function VANav() {

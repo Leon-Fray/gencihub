@@ -6,13 +6,14 @@ import https from 'https'
 export const runtime = 'nodejs'
 
 // ===================================================================
-// CONFIGURATION (from upvote.py)
+// CONFIGURATION
 // ===================================================================
 
 const API_KEY = "xru1IOVjfOuey2jqQ1XUY9Pf22Q2hhDB"
 const API_URL = "https://upvote.biz/api/v1"
-const SERVICE_ID = 2
-const QUANTITY = 10
+const UPVOTE_SERVICE_ID = 2
+const COMMENT_SERVICE_ID = 5 // Update this with your actual comment service ID
+const DEFAULT_QUANTITY = 10
 
 // Proxy configuration
 const PROXY_IP = '45.45.153.16'
@@ -74,7 +75,7 @@ function makeProxyRequest(url: string, options: any, body: string): Promise<any>
 
 export async function POST(request: NextRequest) {
   try {
-    const { postLink } = await request.json()
+    const { postLink, action = 'upvote', comments, delay1, delay2, quantity, speed } = await request.json()
 
     if (!postLink) {
       return NextResponse.json(
@@ -91,14 +92,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Prepare the payload for upvote.biz API
+    // Validate action type
+    if (action !== 'upvote' && action !== 'comment') {
+      return NextResponse.json(
+        { error: 'Action must be either "upvote" or "comment"' },
+        { status: 400 }
+      )
+    }
+
+    // Build form data based on action type
     const formData = new URLSearchParams({
       key: API_KEY,
       action: 'add',
-      service: SERVICE_ID.toString(),
-      link: postLink,
-      quantity: QUANTITY.toString()
+      link: postLink
     })
+
+    if (action === 'upvote') {
+      // Upvote request
+      formData.append('service', UPVOTE_SERVICE_ID.toString())
+      formData.append('quantity', (quantity || DEFAULT_QUANTITY).toString())
+      if (speed) {
+        formData.append('speed', speed.toString())
+      }
+    } else if (action === 'comment') {
+      // Comment request
+      if (!comments || comments.trim() === '') {
+        return NextResponse.json(
+          { error: 'Comments are required when action is "comment"' },
+          { status: 400 }
+        )
+      }
+
+      formData.append('service', COMMENT_SERVICE_ID.toString())
+      formData.append('comments', comments)
+
+      // Optional delay parameters
+      if (delay1) {
+        formData.append('delay1', delay1.toString())
+      }
+      if (delay2) {
+        formData.append('delay2', delay2.toString())
+      }
+    }
 
     // Make the request to upvote.biz API through the proxy
     const response = await makeProxyRequest(API_URL, {
@@ -113,17 +148,21 @@ export async function POST(request: NextRequest) {
       throw new Error(`API responded with status ${response.status}: ${response.text}`)
     }
 
+    const successMessage = action === 'upvote' 
+      ? `Successfully sent ${quantity || DEFAULT_QUANTITY} upvotes!` 
+      : 'Comments have been sent successfully!'
+
     return NextResponse.json({
       success: true,
-      message: 'Upvotes have been sent successfully!',
+      message: successMessage,
       data: response.data
     })
 
   } catch (error) {
-    console.error('Upvote bot error:', error)
+    console.error('Reddit bot error:', error)
     return NextResponse.json(
       { 
-        error: 'Failed to send upvotes',
+        error: 'Failed to process request',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

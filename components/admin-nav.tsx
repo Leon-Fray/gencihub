@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Dashboard', href: '/admin' },
   { name: 'Tasks', href: '/admin/tasks' },
   { name: 'Users', href: '/admin/users' },
+  { name: 'Time Tracking', href: '/admin/time-tracking' },
   { name: 'Models', href: '/admin/models' },
   { name: 'Resources', href: '/admin/resources' },
   { name: 'Scheduler', href: '/admin/scheduler' },

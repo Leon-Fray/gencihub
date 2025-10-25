@@ -269,6 +269,44 @@ export async function clockOut(vaId: string) {
   revalidatePath('/dashboard')
 }
 
+export async function getTotalHoursWorked(vaId: string) {
+  const supabase = createSupabaseAdminClient()
+  
+  // Get all completed time tracking records
+  const { data: timeRecords, error } = await supabase
+    .from('time_tracking')
+    .select('clock_in, clock_out')
+    .eq('va_id', vaId)
+    .not('clock_out', 'is', null)
+    .order('clock_in', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch time records: ${error.message}`)
+  }
+
+  if (!timeRecords || timeRecords.length === 0) {
+    return {
+      totalHours: 0,
+      totalShifts: 0,
+      records: []
+    }
+  }
+
+  // Calculate total hours
+  const total = timeRecords.reduce((sum, record) => {
+    const clockIn = new Date(record.clock_in)
+    const clockOut = new Date(record.clock_out)
+    const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60)
+    return sum + hours
+  }, 0)
+
+  return {
+    totalHours: total,
+    totalShifts: timeRecords.length,
+    records: timeRecords
+  }
+}
+
 // Admin Actions
 export async function createSchedule(formData: FormData) {
   const supabase = createSupabaseAdminClient()
@@ -716,7 +754,7 @@ export async function getUserResourceStats(vaId: string) {
   return assignments
 }
 
-// IP Proxy Management Actions (from proxyList300.txt file)
+// IP Proxy Management Actions (from proxyListNew.txt file)
 export async function getAvailableIPProxy(vaId: string) {
   const supabase = createSupabaseAdminClient()
   
@@ -734,7 +772,7 @@ export async function getAvailableIPProxy(vaId: string) {
   if (error) {
     if (error.code === 'PGRST116') {
       // No rows returned - all IPs have been assigned
-      throw new Error('No available IP proxies. All IPs from proxyList300.txt have been assigned to VAs.')
+      throw new Error('No available IP proxies. All IPs from proxyListNew.txt have been assigned to VAs. Add more proxies using the "Add Proxies" button.')
     }
     throw new Error(`Failed to get IP proxy: ${error.message}`)
   }
@@ -763,87 +801,212 @@ export async function getAvailableIPProxy(vaId: string) {
   }
 }
 
-export async function syncIPProxiesFromStorage() {
+// Sync IP proxies from local proxyListNew.txt file
+export async function syncIPProxiesFromFile() {
+  'use server'
+  
+  const supabase = createSupabaseAdminClient()
+  const fs = require('fs').promises
+  const path = require('path')
+  
+  try {
+    // Read the local proxyListNew.txt file
+    const filePath = path.join(process.cwd(), 'proxyListNew.txt')
+    console.log('Reading proxies from:', filePath)
+    
+    const fileContents = await fs.readFile(filePath, 'utf-8')
+    const lines = fileContents.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0)
+
+    console.log(`Found ${lines.length} IP proxies in file`)
+
+    if (lines.length === 0) {
+      return { 
+        added: 0, 
+        message: 'proxyListNew.txt is empty. Please add IP proxies to the file.' 
+      }
+    }
+
+    // Get existing IP proxies from database
+    const { data: existingIPs, error: dbError } = await supabase
+      .from('ip_proxies')
+      .select('ip_proxy, line_number')
+
+    if (dbError) {
+      throw new Error(`Failed to query existing IP proxies: ${dbError.message}`)
+    }
+
+    const existingIPSet = new Set(
+      existingIPs?.map(ip => ip.ip_proxy) || []
+    )
+
+    // Find new IPs that aren't in the database yet
+    const newIPs = lines
+      .map((ip: string, index: number) => ({ ip, lineNumber: index + 1 }))
+      .filter(({ ip }: { ip: string }) => !existingIPSet.has(ip))
+
+    if (newIPs.length === 0) {
+      return { 
+        added: 0, 
+        message: 'All IP proxies from the file are already in the database.' 
+      }
+    }
+
+    // Insert new IP proxies into database
+    const ipsToInsert = newIPs.map(({ ip, lineNumber }: { ip: string; lineNumber: number }) => ({
+      ip_proxy: ip,
+      line_number: lineNumber,
+    }))
+    
+    console.log(`Inserting ${ipsToInsert.length} new IP proxies...`)
+
+    const { error: insertError } = await supabase
+      .from('ip_proxies')
+      .insert(ipsToInsert)
+
+    if (insertError) {
+      throw new Error(`Failed to insert new IP proxies: ${insertError.message}`)
+    }
+
+    revalidatePath('/admin/resources')
+    
+    return {
+      added: newIPs.length,
+      message: `Successfully added ${newIPs.length} new IP proxy${newIPs.length > 1 ? 'ies' : ''} to the database.`
+    }
+  } catch (error) {
+    console.error('Error syncing proxies:', error)
+    throw new Error(`Failed to sync proxies from file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+// Clear all unassigned proxies and resync from proxyListNew.txt
+export async function clearAndResyncProxies() {
+  'use server'
+  
   const supabase = createSupabaseAdminClient()
   
-  // Download the proxyList300.txt file from the iplist bucket
-  console.log('Syncing IP proxies from storage...')
-  const { data: fileData, error: downloadError } = await supabase
-    .storage
-    .from('iplist')
-    .download('proxyList300.txt')
+  try {
+    // Delete all unassigned proxies (where last_used_by_id is NULL)
+    const { error: deleteError } = await supabase
+      .from('ip_proxies')
+      .delete()
+      .is('last_used_by_id', null)
 
-  if (downloadError) {
-    console.error('Download error:', downloadError)
-    if (downloadError.message.includes('not found') || downloadError.message.includes('does not exist')) {
-      throw new Error('File "proxyList300.txt" not found in "iplist" bucket. Please upload it to Supabase Storage → iplist bucket.')
+    if (deleteError) {
+      throw new Error(`Failed to delete old proxies: ${deleteError.message}`)
     }
-    throw new Error(`Failed to download proxyList300.txt: ${downloadError.message}`)
-  }
 
-  if (!fileData) {
-    throw new Error('No data received from proxyList300.txt file.')
-  }
-
-  // Read the file contents
-  const fileContents = await fileData.text()
-  const lines = fileContents.split('\n').map(line => line.trim()).filter(line => line.length > 0)
-
-  console.log(`Found ${lines.length} IP proxies in file`)
-
-  if (lines.length === 0) {
-    return { 
-      added: 0, 
-      message: 'proxyList300.txt is empty. Please add IP proxies to the file.' 
+    // Now sync from proxyListNew.txt
+    const result = await syncIPProxiesFromFile()
+    
+    revalidatePath('/admin/resources')
+    
+    return {
+      success: true,
+      message: `Cleared old unassigned proxies and synced ${result.added} new proxies from proxyListNew.txt`
     }
+  } catch (error) {
+    console.error('Error clearing and resyncing proxies:', error)
+    throw new Error(`Failed to clear and resync proxies: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+}
 
-  // Get existing IP proxies from database
-  const { data: existingIPs, error: dbError } = await supabase
-    .from('ip_proxies')
-    .select('ip_proxy, line_number')
-
-  if (dbError) {
-    throw new Error(`Failed to query existing IP proxies: ${dbError.message}`)
-  }
-
-  const existingIPSet = new Set(
-    existingIPs?.map(ip => ip.ip_proxy) || []
-  )
-
-  // Find new IPs that aren't in the database yet
-  const newIPs = lines
-    .map((ip, index) => ({ ip, lineNumber: index + 1 }))
-    .filter(({ ip }) => !existingIPSet.has(ip))
-
-  if (newIPs.length === 0) {
-    return { 
-      added: 0, 
-      message: 'All IP proxies from the file are already in the database.' 
-    }
-  }
-
-  // Insert new IP proxies into database
-  const ipsToInsert = newIPs.map(({ ip, lineNumber }) => ({
-    ip_proxy: ip,
-    line_number: lineNumber,
-  }))
+// Add new proxies to proxyListNew.txt file and sync to database
+export async function addProxiesToFile(proxiesText: string) {
+  'use server'
   
-  console.log(`Inserting ${ipsToInsert.length} new IP proxies...`)
-
-  const { error: insertError } = await supabase
-    .from('ip_proxies')
-    .insert(ipsToInsert)
-
-  if (insertError) {
-    throw new Error(`Failed to insert new IP proxies: ${insertError.message}`)
-  }
-
-  revalidatePath('/admin/resources')
+  const supabase = createSupabaseAdminClient()
+  const fs = require('fs').promises
+  const path = require('path')
   
-  return {
-    added: newIPs.length,
-    message: `Successfully added ${newIPs.length} new IP proxy${newIPs.length > 1 ? 'ies' : ''} to the database.`
+  try {
+    // Parse the proxies text
+    const newProxies = proxiesText
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0)
+
+    if (newProxies.length === 0) {
+      throw new Error('No valid proxy addresses provided')
+    }
+
+    const filePath = path.join(process.cwd(), 'proxyListNew.txt')
+    
+    // Read existing file content
+    let existingContent = ''
+    try {
+      existingContent = await fs.readFile(filePath, 'utf-8')
+    } catch (error) {
+      // File doesn't exist, that's okay
+      console.log('File does not exist, creating new one')
+    }
+
+    // Get existing proxies to avoid duplicates
+    const existingProxies = new Set(
+      existingContent.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0)
+    )
+
+    // Filter out duplicates
+    const uniqueNewProxies = newProxies.filter((proxy: string) => !existingProxies.has(proxy))
+
+    if (uniqueNewProxies.length === 0) {
+      return {
+        added: 0,
+        message: 'All provided proxies already exist in the file.'
+      }
+    }
+
+    // Append new proxies to the file
+    const appendContent = uniqueNewProxies.join('\n') + '\n'
+    await fs.appendFile(filePath, appendContent, 'utf-8')
+
+    // Now sync to database
+    const { data: existingIPsInDB, error: dbError } = await supabase
+      .from('ip_proxies')
+      .select('ip_proxy')
+
+    if (dbError) {
+      throw new Error(`Failed to query existing IP proxies: ${dbError.message}`)
+    }
+
+    const existingIPSet = new Set(
+      existingIPsInDB?.map(ip => ip.ip_proxy) || []
+    )
+
+    // Re-read the full file to get correct line numbers
+    const fullFileContent = await fs.readFile(filePath, 'utf-8')
+    const allLines = fullFileContent.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0)
+
+    // Find the new proxies in the file with their line numbers
+    const proxiesToInsert = uniqueNewProxies
+      .map((proxy: string) => {
+        const lineNumber = allLines.indexOf(proxy) + 1
+        return {
+          ip_proxy: proxy,
+          line_number: lineNumber
+        }
+      })
+      .filter((item: { ip_proxy: string }) => !existingIPSet.has(item.ip_proxy))
+
+    if (proxiesToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from('ip_proxies')
+        .insert(proxiesToInsert)
+
+      if (insertError) {
+        throw new Error(`Failed to insert new IP proxies: ${insertError.message}`)
+      }
+    }
+
+    revalidatePath('/admin/resources')
+
+    return {
+      added: uniqueNewProxies.length,
+      message: `Successfully added ${uniqueNewProxies.length} new proxy${uniqueNewProxies.length > 1 ? 's' : ''} to proxyListNew.txt and database.`
+    }
+  } catch (error) {
+    console.error('Error adding proxies:', error)
+    throw new Error(`Failed to add proxies: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
@@ -966,5 +1129,133 @@ export async function deleteCookie(cookieId: number) {
   return {
     success: true,
     message: `Successfully deleted cookie: ${cookie.cookie_name}`
+  }
+}
+
+// Upload multiple cookie files with automatic renaming to Cookie_1, Cookie_2, etc.
+export async function uploadCookieFiles(formData: FormData) {
+  'use server'
+  
+  const supabase = createSupabaseAdminClient()
+  
+  const files = formData.getAll('files') as File[]
+  
+  if (!files || files.length === 0) {
+    throw new Error('No files provided')
+  }
+
+  // Validate all files first
+  for (const file of files) {
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    if (!extension || !['json', 'txt'].includes(extension)) {
+      throw new Error(`Invalid file type for "${file.name}". Only .json and .txt files are supported.`)
+    }
+  }
+
+  // Get all existing cookies to determine the next number
+  const { data: existingCookies, error: fetchError } = await supabase
+    .from('cookies')
+    .select('cookie_name')
+    .order('id', { ascending: true })
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch existing cookies: ${fetchError.message}`)
+  }
+
+  // Find the highest Cookie number
+  let maxNumber = 0
+  if (existingCookies && existingCookies.length > 0) {
+    for (const cookie of existingCookies) {
+      // Extract number from Cookie_X pattern
+      const match = cookie.cookie_name.match(/^Cookie_(\d+)/)
+      if (match) {
+        const num = parseInt(match[1], 10)
+        if (num > maxNumber) {
+          maxNumber = num
+        }
+      }
+    }
+  }
+
+  const uploadedFiles: string[] = []
+  const failedFiles: { name: string; error: string }[] = []
+  let currentNumber = maxNumber
+
+  // Process each file
+  for (const file of files) {
+    try {
+      currentNumber++
+      const originalName = file.name
+      const extension = originalName.split('.').pop()?.toLowerCase()
+      const newFileName = `Cookie_${currentNumber}.${extension}`
+
+      // Convert File to ArrayBuffer for upload
+      const arrayBuffer = await file.arrayBuffer()
+      const fileBuffer = Buffer.from(arrayBuffer)
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase
+        .storage
+        .from('cookies')
+        .upload(newFileName, fileBuffer, {
+          contentType: extension === 'json' ? 'application/json' : 'text/plain',
+          upsert: false,
+        })
+
+      if (uploadError) {
+        throw new Error(`Storage upload failed: ${uploadError.message}`)
+      }
+
+      // Add to database
+      const { error: dbError } = await supabase
+        .from('cookies')
+        .insert({
+          cookie_name: newFileName,
+          cookie_file_path: `/cookies/${newFileName}`,
+        })
+
+      if (dbError) {
+        // If database insert fails, try to delete the uploaded file
+        await supabase.storage.from('cookies').remove([newFileName])
+        throw new Error(`Database insert failed: ${dbError.message}`)
+      }
+
+      uploadedFiles.push(newFileName)
+    } catch (error) {
+      currentNumber-- // Rollback the number increment
+      failedFiles.push({
+        name: file.name,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  revalidatePath('/admin/resources')
+
+  // Generate result message
+  let message = ''
+  if (uploadedFiles.length > 0) {
+    message += `Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`
+    if (uploadedFiles.length <= 5) {
+      message += `: ${uploadedFiles.join(', ')}`
+    }
+  }
+  
+  if (failedFiles.length > 0) {
+    if (uploadedFiles.length > 0) message += '. '
+    message += `${failedFiles.length} file${failedFiles.length > 1 ? 's' : ''} failed: ${failedFiles.map(f => f.name).join(', ')}`
+  }
+
+  if (failedFiles.length > 0 && uploadedFiles.length === 0) {
+    throw new Error(message)
+  }
+
+  return {
+    success: true,
+    uploadedCount: uploadedFiles.length,
+    failedCount: failedFiles.length,
+    uploadedFiles,
+    failedFiles,
+    message,
   }
 }

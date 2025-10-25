@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { createSupabaseClient } from '@/lib/supabase-client'
 import { clockIn, clockOut } from '@/lib/actions'
 import { useToast } from '@/hooks/use-toast'
-import { Clock, LogIn, LogOut } from 'lucide-react'
+import { Clock, LogIn, LogOut, Timer } from 'lucide-react'
 
 interface TimeTrackerProps {
   vaId: string
@@ -14,12 +14,14 @@ interface TimeTrackerProps {
 export function TimeTracker({ vaId }: TimeTrackerProps) {
   const [isClockedIn, setIsClockedIn] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [totalHours, setTotalHours] = useState(0)
   const { toast } = useToast()
   const supabase = createSupabaseClient()
 
   useEffect(() => {
-    // Check if user is currently clocked in
-    const checkClockStatus = async () => {
+    // Check if user is currently clocked in and calculate total hours
+    const checkClockStatusAndCalculateHours = async () => {
+      // Check current clock status
       const { data: timeRecord } = await supabase
         .from('time_tracking')
         .select('*')
@@ -30,9 +32,27 @@ export function TimeTracker({ vaId }: TimeTrackerProps) {
         .maybeSingle()
 
       setIsClockedIn(!!timeRecord)
+
+      // Calculate total hours from all completed shifts
+      const { data: allRecords } = await supabase
+        .from('time_tracking')
+        .select('clock_in, clock_out')
+        .eq('va_id', vaId)
+        .not('clock_out', 'is', null)
+        .order('clock_in', { ascending: false })
+
+      if (allRecords && allRecords.length > 0) {
+        const total = allRecords.reduce((sum, record) => {
+          const clockIn = new Date(record.clock_in)
+          const clockOut = new Date(record.clock_out)
+          const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60)
+          return sum + hours
+        }, 0)
+        setTotalHours(total)
+      }
     }
 
-    checkClockStatus()
+    checkClockStatusAndCalculateHours()
   }, [vaId, supabase])
 
   const handleClockIn = async () => {
@@ -77,6 +97,25 @@ export function TimeTracker({ vaId }: TimeTrackerProps) {
       } else {
         await clockOut(vaId)
         setIsClockedIn(false)
+        
+        // Recalculate total hours after clocking out
+        const { data: allRecords } = await supabase
+          .from('time_tracking')
+          .select('clock_in, clock_out')
+          .eq('va_id', vaId)
+          .not('clock_out', 'is', null)
+          .order('clock_in', { ascending: false })
+
+        if (allRecords && allRecords.length > 0) {
+          const total = allRecords.reduce((sum, record) => {
+            const clockIn = new Date(record.clock_in)
+            const clockOut = new Date(record.clock_out)
+            const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60)
+            return sum + hours
+          }, 0)
+          setTotalHours(total)
+        }
+        
         toast({
           title: "Clocked Out",
           description: "You have successfully clocked out.",
@@ -96,12 +135,21 @@ export function TimeTracker({ vaId }: TimeTrackerProps) {
   return (
     <div className="bg-blue-600 text-white px-4 py-2">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Clock className="h-5 w-5" />
-          <span className="font-medium">Time Tracker</span>
-          <span className="text-blue-200">
-            {isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
-          </span>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Clock className="h-5 w-5" />
+            <span className="font-medium">Time Tracker</span>
+            <span className="text-blue-200">
+              {isClockedIn ? 'Currently Clocked In' : 'Not Clocked In'}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 border-l border-blue-400 pl-4">
+            <Timer className="h-5 w-5" />
+            <span className="font-medium">Total Hours:</span>
+            <span className="text-blue-100 font-bold">
+              {totalHours.toFixed(2)} hrs
+            </span>
+          </div>
         </div>
         <div className="flex items-center space-x-2">
           {isClockedIn ? (
