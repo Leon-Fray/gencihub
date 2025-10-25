@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { syncCookiesFromStorage, syncIPProxiesFromStorage } from '@/lib/actions'
+import { syncCookiesFromStorage, syncIPProxiesFromFile } from '@/lib/actions'
 import { useToast } from '@/hooks/use-toast'
 import { RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -21,7 +21,7 @@ export function SyncCookiesButton() {
       // Try to sync IPs, but don't fail if bucket/file doesn't exist yet
       let ipResult = { added: 0, message: '' }
       try {
-        ipResult = await syncIPProxiesFromStorage()
+        ipResult = await syncIPProxiesFromFile()
       } catch (ipError) {
         // Only show IP error if cookies also failed
         if (cookieResult.added === 0) {
