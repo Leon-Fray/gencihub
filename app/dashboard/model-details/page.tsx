@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { getVAModelAssignments } from '@/lib/model-actions'
 import { redirect } from 'next/navigation'
-import { ModelTileWithSpoofClient } from '@/components/model-tile-with-spoof-client'
+import { ModelTileWithGallery } from '@/components/model-tile-with-gallery'
 
 export default async function ModelDetailsPage() {
   const supabase = createSupabaseServerClient()
@@ -63,7 +63,7 @@ export default async function ModelDetailsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {models.map((model) => (
-            <ModelTileWithSpoofClient
+            <ModelTileWithGallery
               key={model.id}
               model={model}
             />
