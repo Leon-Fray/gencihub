@@ -7,6 +7,7 @@ import { UpdateTaskStatusButton } from '@/components/update-task-status-button'
 import { TargetSubredditsList } from '@/components/target-subreddits-list'
 import { WorkNotesForm } from '@/components/work-notes-form'
 import { UpvoteBot } from '@/components/upvote-bot'
+import { UpvoteBot2 } from '@/components/upvote-bot-2'
 
 interface TaskDetailPageProps {
   params: {
@@ -146,7 +147,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
       {isUpvoteTask && targetSubreddits.length > 0 && (
         <>
           {/* Subreddit List */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Target Subreddits */}
             <Card>
               <CardHeader>
@@ -167,8 +168,11 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
               </CardContent>
             </Card>
 
-            {/* Upvote Bot */}
-            <UpvoteBot />
+            {/* Upvote Bots */}
+            <div className="lg:col-span-2 space-y-4">
+              <UpvoteBot />
+              <UpvoteBot2 />
+            </div>
 
             {/* Work Notes */}
             <Card>
