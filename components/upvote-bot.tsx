@@ -49,19 +49,6 @@ export function UpvoteBot() {
       return
     }
 
-    // Validate quantity for upvotes
-    if (action === 'upvote') {
-      const qty = parseInt(quantity)
-      if (isNaN(qty) || qty < 1 || qty > 1000) {
-        toast({
-          title: 'Error',
-          description: 'Quantity must be between 1 and 1000',
-          variant: 'destructive',
-        })
-        return
-      }
-    }
-
     setIsLoading(true)
 
     try {
@@ -143,8 +130,6 @@ export function UpvoteBot() {
               <Input 
                 id="quantity"
                 type="number"
-                min="1"
-                max="1000"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="10"
@@ -152,7 +137,7 @@ export function UpvoteBot() {
                 disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Enter a number between 1 and 1000
+                Enter the number of upvotes
               </p>
             </div>
 

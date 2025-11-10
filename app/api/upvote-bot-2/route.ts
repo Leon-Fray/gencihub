@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import https from 'https'
+import { evaluate } from 'mathjs' // Import evaluate from mathjs
 
 // Force this route to use Node.js runtime (required for proxy support)
 export const runtime = 'nodejs'
@@ -104,10 +105,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate target upvotes
-    if (!target_upvotes || target_upvotes < 1) {
+    // Validate target_upvotes is a string
+    if (typeof target_upvotes !== 'string') {
       return NextResponse.json(
-        { error: 'Target upvotes must be at least 1' },
+        { error: 'Target upvotes must be a string (equation or number)' },
+        { status: 400 }
+      )
+    }
+
+    let evaluatedUpvotes: number
+    try {
+      evaluatedUpvotes = evaluate(target_upvotes)
+      if (typeof evaluatedUpvotes !== 'number') {
+        throw new Error('Expression must evaluate to a number')
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { error: `Invalid target upvotes equation: ${error instanceof Error ? error.message : 'Unknown error'}` },
         { status: 400 }
       )
     }
@@ -116,7 +130,7 @@ export async function POST(request: NextRequest) {
     const requestBody = {
       url: postLink,
       speed_preset,
-      target_upvotes
+      target_upvotes: evaluatedUpvotes // Use the evaluated number
     }
 
     // Make the request to UpvoteHub API through the proxy
